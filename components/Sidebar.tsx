@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { LayoutGrid, LogOut, ChevronDown, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
+import { LayoutGrid, LogOut, ChevronDown, Settings, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,8 +12,15 @@ const RESEARCH_URL =
 
 export function Sidebar({ mobile }: { mobile?: boolean } = {}) {
   const [featuresOpen, setFeaturesOpen] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.app_metadata?.role === "admin") setIsAdmin(true);
+    });
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -70,6 +77,33 @@ export function Sidebar({ mobile }: { mobile?: boolean } = {}) {
           <LayoutGrid size={14} />
           <span>Apps</span>
         </button>
+
+        {isAdmin && (
+          <button
+            onClick={() => router.push("/dashboard/admin")}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.6rem",
+              padding: "0.55rem 0.75rem",
+              borderRadius: 7,
+              border: "none",
+              background: "transparent",
+              color: "#c9d1d9",
+              fontSize: "0.82rem",
+              fontFamily: "DM Sans, sans-serif",
+              cursor: "pointer",
+              transition: "color 0.15s",
+              marginBottom: "0.25rem",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#a78bfa")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "#c9d1d9")}
+          >
+            <ShieldCheck size={14} />
+            <span>Admin</span>
+          </button>
+        )}
       </div>
       <div style={{ flex: 1 }} />
 
