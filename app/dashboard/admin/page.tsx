@@ -1,34 +1,43 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ShieldCheck, UserCheck, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { ShieldCheck, UserCheck, Clock, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
 
 type RequestStatus = 'pending' | 'approved' | 'rejected'
 
 interface UserRequest {
-  id: number
+  id: string
+  user_id: string
   name: string
   email: string
   projects: string[]
-  date: string
+  created_at: string
   status: RequestStatus
   isAdmin: boolean
 }
 
-const INITIAL_REQUESTS: UserRequest[] = [
-  { id: 1, name: 'Alex Johnson',    email: 'alex.johnson@example.com',    projects: ['Project 1'],             date: '14 Jun 2026', status: 'pending',  isAdmin: false },
-  { id: 2, name: 'Sarah Chen',      email: 'sarah.chen@example.com',      projects: ['Project 2', 'Project 3'], date: '13 Jun 2026', status: 'pending',  isAdmin: false },
-  { id: 3, name: 'Michael Torres',  email: 'michael.torres@example.com',  projects: ['Project 1', 'Project 2'], date: '12 Jun 2026', status: 'approved', isAdmin: false },
-  { id: 4, name: 'Emma Davis',      email: 'emma.davis@example.com',      projects: ['Project 3'],             date: '11 Jun 2026', status: 'pending',  isAdmin: false },
-  { id: 5, name: 'James Wilson',    email: 'james.wilson@example.com',    projects: ['Project 1'],             date: '10 Jun 2026', status: 'rejected', isAdmin: false },
-]
-
 export default function AdminPage() {
-  const [ready, setReady] = useState(false)
-  const [requests, setRequests] = useState<UserRequest[]>(INITIAL_REQUESTS)
+  const [ready, setReady]       = useState(false)
+  const [requests, setRequests] = useState<UserRequest[]>([])
+  const [loading, setLoading]   = useState(true)
   const router = useRouter()
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true)
+    const res = await fetch('/api/admin/requests')
+    if (res.ok) {
+      const data = await res.json()
+      // We need the isAdmin flag — fetch from auth.admin is server-side only,
+      // so we rely on the response including it after toggle actions update local state.
+      setRequests(data.map((r: Omit<UserRequest, 'isAdmin'> & { is_admin?: boolean }) => ({
+        ...r,
+        isAdmin: r.is_admin ?? false,
+      })))
+    }
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
     const supabase = createClient()
@@ -37,16 +46,31 @@ export default function AdminPage() {
         router.replace('/dashboard')
       } else {
         setReady(true)
+        fetchRequests()
       }
     })
-  }, [router])
+  }, [router, fetchRequests])
 
-  function updateStatus(id: number, status: RequestStatus) {
+  async function updateStatus(id: string, status: RequestStatus) {
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+    await fetch('/api/admin/requests', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    })
   }
 
-  function toggleAdmin(id: number) {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, isAdmin: !r.isAdmin } : r))
+  async function toggleAdmin(id: string) {
+    const res = await fetch('/api/admin/requests', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, toggleAdmin: true }),
+    })
+    if (res.ok) {
+      const body = await res.json()
+      const newIsAdmin = body.role === 'admin'
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, isAdmin: newIsAdmin } : r))
+    }
   }
 
   if (!ready) return null
@@ -57,7 +81,6 @@ export default function AdminPage() {
   return (
     <div style={{ padding: '2.5rem 2rem', maxWidth: 1100 }}>
 
-      {/* Header */}
       <div style={{ marginBottom: '2.5rem' }}>
         <p style={{
           fontSize: '0.75rem', color: '#9ca3af', letterSpacing: '0.08em',
@@ -65,15 +88,29 @@ export default function AdminPage() {
         }}>
           Restricted
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <ShieldCheck size={22} color="#7c3aed" />
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 600, color: '#111827', lineHeight: 1.2 }}>
-            Admin Panel
-          </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <ShieldCheck size={22} color="#7c3aed" />
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 600, color: '#111827', lineHeight: 1.2 }}>
+              Admin Panel
+            </h1>
+          </div>
+          <button
+            onClick={fetchRequests}
+            disabled={loading}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+              fontSize: '0.75rem', fontWeight: 500, color: '#6b7280',
+              background: '#f9fafb', border: '1px solid #e5e7eb',
+              borderRadius: 6, padding: '0.35rem 0.7rem', cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Pending requests */}
       <Section title="Pending Requests" count={pending.length}>
         {pending.length === 0 ? (
           <EmptyState text="No pending requests." />
@@ -90,7 +127,6 @@ export default function AdminPage() {
         )}
       </Section>
 
-      {/* Resolved */}
       <Section title="Resolved" count={resolved.length} style={{ marginTop: '2rem' }}>
         {resolved.length === 0 ? (
           <EmptyState text="Nothing resolved yet." />
@@ -110,8 +146,6 @@ export default function AdminPage() {
     </div>
   )
 }
-
-/* ── Sub-components ─────────────────────────────────────────────── */
 
 function Section({
   title, count, children, style,
@@ -148,6 +182,11 @@ function RequestRow({
   onReject: () => void
   onToggleAdmin: () => void
 }) {
+  const displayName = req.name || req.email.split('@')[0]
+  const dateLabel = new Date(req.created_at).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+
   return (
     <div style={{
       background: '#ffffff',
@@ -161,20 +200,18 @@ function RequestRow({
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
     }}>
 
-      {/* Avatar */}
       <div style={{
         width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-        background: avatarColor(req.name),
+        background: avatarColor(displayName),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '0.8rem', fontWeight: 700, color: '#fff',
       }}>
-        {initials(req.name)}
+        {initials(displayName)}
       </div>
 
-      {/* Info */}
       <div style={{ flex: 1, minWidth: 160 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>{req.name}</span>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>{displayName}</span>
           {req.isAdmin && (
             <span style={{
               fontSize: '0.65rem', fontWeight: 600, color: '#7c3aed',
@@ -199,33 +236,20 @@ function RequestRow({
         </div>
       </div>
 
-      {/* Date + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-        <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{req.date}</span>
+        <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{dateLabel}</span>
         <StatusBadge status={req.status} />
       </div>
 
-      {/* Actions */}
       <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
         {req.status === 'pending' && (
           <>
-            <ActionButton
-              label="Approve"
-              icon={<CheckCircle2 size={13} />}
-              color="#059669"
-              bg="rgba(5,150,105,0.08)"
-              border="rgba(5,150,105,0.25)"
-              onClick={onApprove}
-            />
-            <ActionButton
-              label="Reject"
-              icon={<XCircle size={13} />}
-              color="#dc2626"
-              bg="rgba(220,38,38,0.06)"
-              border="rgba(220,38,38,0.2)"
-              onClick={onReject}
-            />
+            <ActionButton label="Approve" icon={<CheckCircle2 size={13} />} color="#059669" bg="rgba(5,150,105,0.08)" border="rgba(5,150,105,0.25)" onClick={onApprove} />
+            <ActionButton label="Reject"  icon={<XCircle size={13} />}       color="#dc2626" bg="rgba(220,38,38,0.06)"  border="rgba(220,38,38,0.2)"  onClick={onReject} />
           </>
+        )}
+        {req.status === 'rejected' && (
+          <ActionButton label="Approve" icon={<CheckCircle2 size={13} />} color="#059669" bg="rgba(5,150,105,0.08)" border="rgba(5,150,105,0.25)" onClick={onApprove} />
         )}
         <ActionButton
           label={req.isAdmin ? 'Revoke Admin' : 'Make Admin'}
@@ -260,15 +284,8 @@ function StatusBadge({ status }: { status: RequestStatus }) {
   )
 }
 
-function ActionButton({
-  label, icon, color, bg, border, onClick,
-}: {
-  label: string
-  icon: React.ReactNode
-  color: string
-  bg: string
-  border: string
-  onClick: () => void
+function ActionButton({ label, icon, color, bg, border, onClick }: {
+  label: string; icon: React.ReactNode; color: string; bg: string; border: string; onClick: () => void
 }) {
   return (
     <button
@@ -299,10 +316,8 @@ function EmptyState({ text }: { text: string }) {
   )
 }
 
-/* ── Helpers ────────────────────────────────────────────────────── */
-
 function initials(name: string) {
-  return name.split(' ').map(n => n[0]).slice(0, 2).join('')
+  return name.split(/[\s@]/).map(n => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 
 const AVATAR_COLORS = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626']

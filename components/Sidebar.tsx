@@ -57,6 +57,7 @@ export function Sidebar({ mobile }: { mobile?: boolean } = {}) {
       </div>
       <div style={{ padding: "0 0.75rem" }}>
         <button
+          onClick={() => router.push("/dashboard")}
           style={{
             width: "100%",
             display: "flex",
@@ -73,6 +74,8 @@ export function Sidebar({ mobile }: { mobile?: boolean } = {}) {
             transition: "color 0.15s",
             marginBottom: "0.25rem",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#a78bfa")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "#c9d1d9")}
         >
           <LayoutGrid size={14} />
           <span>Apps</span>

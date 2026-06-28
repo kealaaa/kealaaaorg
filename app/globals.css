@@ -69,3 +69,65 @@ input:-webkit-autofill {
     padding: 1.5rem !important;
   }
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Auth pages ── */
+.auth-panel {
+  display: none;
+}
+
+.auth-mobile-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+}
+
+@media (min-width: 860px) {
+  .auth-panel {
+    display: flex;
+    flex: 0 0 400px;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 3rem;
+    background: linear-gradient(150deg, #0e1726 0%, #101d35 55%, #090f1c 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+    overflow: hidden;
+  }
+  .auth-mobile-logo {
+    display: none;
+  }
+}
+
+.auth-panel-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(87, 94, 207, 0.13) 1px, transparent 1px);
+  background-size: 26px 26px;
+  pointer-events: none;
+}
+
+.auth-panel-glow {
+  position: absolute;
+  top: 15%;
+  left: -15%;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(87, 94, 207, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-input:focus {
+  border-color: rgba(87, 94, 207, 0.6) !important;
+  box-shadow: 0 0 0 3px rgba(87, 94, 207, 0.12) !important;
+}
+
+.auth-btn:hover:not(:disabled) {
+  background: #6469d6 !important;
+  box-shadow: 0 4px 16px rgba(87, 94, 207, 0.35) !important;
+}
