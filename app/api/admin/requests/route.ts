@@ -3,9 +3,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
 async function assertAdmin() {
+  // Identify the caller via their session cookie
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user?.app_metadata?.role !== 'admin') return null
+  if (!user) return null
+
+  // Verify their role via the service-role client — avoids expired-token issues
+  // because the admin client talks directly to Supabase, not through the cookie session
+  const admin = createAdminClient()
+  const { data: { user: authUser } } = await admin.auth.admin.getUserById(user.id)
+  if (authUser?.app_metadata?.role !== 'admin') return null
   return user
 }
 

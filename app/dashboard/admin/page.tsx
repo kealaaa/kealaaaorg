@@ -22,21 +22,29 @@ export default function AdminPage() {
   const [ready, setReady]       = useState(false)
   const [requests, setRequests] = useState<UserRequest[]>([])
   const [loading, setLoading]   = useState(true)
+  const [fetchError, setFetchError] = useState('')
   const router = useRouter()
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/requests')
-    if (res.ok) {
-      const data = await res.json()
-      // We need the isAdmin flag — fetch from auth.admin is server-side only,
-      // so we rely on the response including it after toggle actions update local state.
-      setRequests(data.map((r: Omit<UserRequest, 'isAdmin'> & { is_admin?: boolean }) => ({
-        ...r,
-        isAdmin: r.is_admin ?? false,
-      })))
+    setFetchError('')
+    try {
+      const res = await fetch('/api/admin/requests')
+      if (res.ok) {
+        const data = await res.json()
+        setRequests(data.map((r: Omit<UserRequest, 'isAdmin'> & { is_admin?: boolean }) => ({
+          ...r,
+          isAdmin: r.is_admin ?? false,
+        })))
+      } else {
+        const body = await res.json().catch(() => ({}))
+        setFetchError(body.error || `Failed to load requests (${res.status})`)
+      }
+    } catch {
+      setFetchError('Network error — could not reach the server.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -110,6 +118,20 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
+
+      {fetchError && (
+        <div style={{
+          marginBottom: '1.5rem',
+          padding: '0.75rem 1rem',
+          background: 'rgba(220,38,38,0.06)',
+          border: '1px solid rgba(220,38,38,0.2)',
+          borderRadius: 8,
+          fontSize: '0.82rem',
+          color: '#dc2626',
+        }}>
+          {fetchError}
+        </div>
+      )}
 
       <Section title="Pending Requests" count={pending.length}>
         {pending.length === 0 ? (

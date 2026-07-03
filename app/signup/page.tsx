@@ -57,46 +57,48 @@ export default function SignupPage() {
     if (selectedProjects.length === 0) { setError('Please select at least one project.'); return }
 
     setLoading(true)
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: { username: name || email.split('@')[0] },
-      },
-    })
-
-    if (signUpError) {
-      setLoading(false)
-      setError(signUpError.message)
-      return
-    }
-
-    const userId = data.user?.id
-    if (userId) {
-      const res = await fetch('/api/signup-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, email, name, projects: selectedProjects }),
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { username: name || email.split('@')[0] },
+        },
       })
-      if (!res.ok) {
-        const body = await res.json()
-        setLoading(false)
-        setError(body.error || 'Failed to submit request.')
+
+      if (signUpError) {
+        setError(signUpError.message)
         return
       }
+
+      const userId = data.user?.id
+      if (userId) {
+        const res = await fetch('/api/signup-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, email, name, projects: selectedProjects }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          setError(body.error || 'Failed to submit request.')
+          return
+        }
+      }
+
+      if (data.session) {
+        router.push('/pending')
+        return
+      }
+
+      setMessage('Account created! Check your email to confirm, then sign in — your request will be reviewed by an admin.')
+    } catch {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
-
-    if (data.session) {
-      router.push('/pending')
-      return
-    }
-
-    setMessage('Account created! Check your email to confirm, then sign in — your request will be reviewed by an admin.')
   }
 
   return (
