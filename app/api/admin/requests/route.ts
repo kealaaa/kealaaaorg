@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@supabase/supabase-js'
 
 // Validate the caller by their Bearer token (sent explicitly by the client).
-// This avoids cookie/session-refresh issues that arise because API routes
-// are not in the middleware matcher.
+// Uses the anon key (guaranteed present in all environments as NEXT_PUBLIC_)
+// so token validation never fails due to a missing service-role key.
 async function assertAdmin(req: NextRequest) {
   try {
     const auth = req.headers.get('authorization')
     if (!auth?.startsWith('Bearer ')) return null
 
     const token = auth.slice(7)
-    const admin = createAdminClient()
 
-    const { data, error } = await admin.auth.getUser(token)
+    // Validate the token with the anon client — works in every environment
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data, error } = await supabase.auth.getUser(token)
     const user = data?.user
     if (error || !user) return null
     if (user.app_metadata?.role !== 'admin') return null
