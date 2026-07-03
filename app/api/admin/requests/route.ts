@@ -38,20 +38,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden', diag }, { status: 403 })
   }
 
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('user_requests')
-    .select('*')
-    .order('created_at', { ascending: false })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 })
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('user_requests')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 }
 
 export async function PATCH(req: NextRequest) {
   const diag = await getAdminDiag(req)
   if (!diag.ok) {
     return NextResponse.json({ error: 'Forbidden', diag }, { status: 403 })
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 })
   }
 
   const body = await req.json()
