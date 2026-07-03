@@ -62,7 +62,10 @@ export default function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { username: name || email.split('@')[0] } },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { username: name || email.split('@')[0] },
+      },
     })
 
     if (signUpError) {
