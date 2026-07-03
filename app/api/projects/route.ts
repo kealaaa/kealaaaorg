@@ -18,7 +18,7 @@ export async function GET() {
 
   const projects: { id: string; name: string; status: string }[] = await res.json()
 
-  const EXCLUDED = new Set(['ClientRiskNavigator', 'keaala', 'keala'])
+  const EXCLUDED = new Set(['ClientRiskNavigator', 'kealaa', 'keala'])
 
   const DISPLAY_NAMES: Record<string, string> = {
     KealaHQ: 'CRM & Workflow',
