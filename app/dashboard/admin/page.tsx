@@ -23,13 +23,25 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<UserRequest[]>([])
   const [loading, setLoading]   = useState(true)
   const [fetchError, setFetchError] = useState('')
+  const [token, setToken]       = useState<string | null>(null)
   const router = useRouter()
 
-  const fetchRequests = useCallback(async () => {
+  // Helper so every API call sends the bearer token explicitly.
+  // This avoids cookie/session-refresh issues in API routes.
+  function authHeaders(extra?: Record<string, string>) {
+    return {
+      'Authorization': `Bearer ${token}`,
+      ...extra,
+    }
+  }
+
+  const fetchRequests = useCallback(async (accessToken: string) => {
     setLoading(true)
     setFetchError('')
     try {
-      const res = await fetch('/api/admin/requests')
+      const res = await fetch('/api/admin/requests', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      })
       if (res.ok) {
         const data = await res.json()
         setRequests(data.map((r: Omit<UserRequest, 'isAdmin'> & { is_admin?: boolean }) => ({
@@ -49,29 +61,34 @@ export default function AdminPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user
       if (user?.app_metadata?.role !== 'admin') {
         router.replace('/dashboard')
-      } else {
-        setReady(true)
-        fetchRequests()
+        return
       }
+      const accessToken = session!.access_token
+      setToken(accessToken)
+      setReady(true)
+      fetchRequests(accessToken)
     })
   }, [router, fetchRequests])
 
   async function updateStatus(id: string, status: RequestStatus) {
+    if (!token) return
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r))
     await fetch('/api/admin/requests', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ id, status }),
     })
   }
 
   async function toggleAdmin(id: string) {
+    if (!token) return
     const res = await fetch('/api/admin/requests', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ id, toggleAdmin: true }),
     })
     if (res.ok) {
@@ -104,8 +121,8 @@ export default function AdminPage() {
             </h1>
           </div>
           <button
-            onClick={fetchRequests}
-            disabled={loading}
+            onClick={() => token && fetchRequests(token)}
+            disabled={loading || !token}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
               fontSize: '0.75rem', fontWeight: 500, color: '#6b7280',

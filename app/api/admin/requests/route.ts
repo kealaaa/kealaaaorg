@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
 
-async function assertAdmin() {
-  // Identify the caller via their session cookie
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+// Validate the caller by their Bearer token (sent explicitly by the client).
+// This avoids cookie/session-refresh issues that arise because API routes
+// are not in the middleware matcher.
+async function assertAdmin(req: NextRequest) {
+  const auth = req.headers.get('authorization')
+  if (!auth?.startsWith('Bearer ')) return null
 
-  // Verify their role via the service-role client — avoids expired-token issues
-  // because the admin client talks directly to Supabase, not through the cookie session
+  const token = auth.slice(7)
   const admin = createAdminClient()
-  const { data: { user: authUser } } = await admin.auth.admin.getUserById(user.id)
-  if (authUser?.app_metadata?.role !== 'admin') return null
+
+  const { data: { user }, error } = await admin.auth.getUser(token)
+  if (error || !user) return null
+  if (user.app_metadata?.role !== 'admin') return null
   return user
 }
 
-export async function GET() {
-  if (!(await assertAdmin())) {
+export async function GET(req: NextRequest) {
+  if (!(await assertAdmin(req))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -32,7 +33,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!(await assertAdmin())) {
+  if (!(await assertAdmin(req))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -56,7 +57,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (toggleAdmin !== undefined) {
-    // Fetch the user_id for this request
     const { data: row, error: fetchErr } = await admin
       .from('user_requests')
       .select('user_id, email')
@@ -64,7 +64,6 @@ export async function PATCH(req: NextRequest) {
       .single()
     if (fetchErr || !row) return NextResponse.json({ error: 'Request not found' }, { status: 404 })
 
-    // Get current app_metadata to decide current role
     const { data: { user: authUser }, error: authErr } = await admin.auth.admin.getUserById(row.user_id)
     if (authErr || !authUser) return NextResponse.json({ error: 'Auth user not found' }, { status: 404 })
 
