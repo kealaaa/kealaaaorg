@@ -61,13 +61,16 @@ export default function AdminPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const user = session?.user
+    // getUser() validates with Supabase and refreshes the token if expired
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user?.app_metadata?.role !== 'admin') {
         router.replace('/dashboard')
         return
       }
-      const accessToken = session!.access_token
+      // getSession() now returns the refreshed token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { router.replace('/login'); return }
+      const accessToken = session.access_token
       setToken(accessToken)
       setReady(true)
       fetchRequests(accessToken)

@@ -5,16 +5,21 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // This avoids cookie/session-refresh issues that arise because API routes
 // are not in the middleware matcher.
 async function assertAdmin(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) return null
+  try {
+    const auth = req.headers.get('authorization')
+    if (!auth?.startsWith('Bearer ')) return null
 
-  const token = auth.slice(7)
-  const admin = createAdminClient()
+    const token = auth.slice(7)
+    const admin = createAdminClient()
 
-  const { data: { user }, error } = await admin.auth.getUser(token)
-  if (error || !user) return null
-  if (user.app_metadata?.role !== 'admin') return null
-  return user
+    const { data, error } = await admin.auth.getUser(token)
+    const user = data?.user
+    if (error || !user) return null
+    if (user.app_metadata?.role !== 'admin') return null
+    return user
+  } catch {
+    return null
+  }
 }
 
 export async function GET(req: NextRequest) {
