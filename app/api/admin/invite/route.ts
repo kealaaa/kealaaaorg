@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const { error: insertErr } = await admin
     .from('user_requests')
     .upsert(
-      { user_id: invitedUser.id, email, name: name || '', projects, status: 'approved' },
+      { user_id: invitedUser.id, email, name: name || '', projects, granted_projects: projects, status: 'approved' },
       { onConflict: 'user_id' }
     )
   if (insertErr) {

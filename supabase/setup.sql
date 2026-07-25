@@ -20,3 +20,9 @@ CREATE POLICY "Users can view own request"
   USING (auth.uid() = user_id);
 
 -- Service role bypasses RLS automatically (used by API routes)
+
+-- Lets an admin grant access to only a subset of the projects a user
+-- requested, independent of the original `projects` request. Defaults to
+-- the full request so existing/legacy rows keep their current access.
+ALTER TABLE user_requests ADD COLUMN IF NOT EXISTS granted_projects TEXT[];
+UPDATE user_requests SET granted_projects = projects WHERE granted_projects IS NULL;

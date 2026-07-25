@@ -12,7 +12,7 @@ export async function GET() {
   // RLS policy "Users can view own request" allows this without the admin client
   const { data, error } = await supabase
     .from('user_requests')
-    .select('projects, status')
+    .select('projects, granted_projects, status')
     .eq('user_id', user.id)
     .single()
 
@@ -20,5 +20,9 @@ export async function GET() {
     return NextResponse.json({ projects: [] })
   }
 
-  return NextResponse.json({ projects: data.projects as string[] })
+  // granted_projects lets an admin approve access to only some of the
+  // requested projects; null means the row predates that column, so fall
+  // back to the full request.
+  const granted = data.granted_projects ?? data.projects
+  return NextResponse.json({ projects: granted as string[] })
 }

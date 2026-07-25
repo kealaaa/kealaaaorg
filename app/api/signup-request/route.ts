@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const { error } = await supabase
     .from('user_requests')
     .upsert(
-      { user_id: userId, email, name: name || '', projects, status: 'pending' },
+      { user_id: userId, email, name: name || '', projects, granted_projects: projects, status: 'pending' },
       { onConflict: 'user_id' }
     )
 

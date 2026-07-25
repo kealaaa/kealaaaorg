@@ -37,10 +37,11 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { id, status, toggleAdmin } = body as {
+  const { id, status, toggleAdmin, grantedProjects } = body as {
     id: string
     status?: 'approved' | 'rejected' | 'pending'
     toggleAdmin?: boolean
+    grantedProjects?: string[]
   }
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
@@ -51,6 +52,17 @@ export async function PATCH(req: NextRequest) {
     const { error } = await admin
       .from('user_requests')
       .update({ status })
+      .eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Lets an admin grant access to only a subset of the projects a user requested.
+  // Stored separately from `projects` (the original request) so it can be
+  // narrowed or widened independently of approve/reject decisions.
+  if (grantedProjects !== undefined) {
+    const { error } = await admin
+      .from('user_requests')
+      .update({ granted_projects: grantedProjects })
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }

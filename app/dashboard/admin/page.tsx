@@ -13,6 +13,7 @@ interface UserRequest {
   name: string
   email: string
   projects: string[]
+  grantedProjects: string[]
   created_at: string
   status: RequestStatus
   isAdmin: boolean
@@ -45,9 +46,10 @@ export default function AdminPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setRequests(data.map((r: Omit<UserRequest, 'isAdmin'> & { is_admin?: boolean }) => ({
+        setRequests(data.map((r: Omit<UserRequest, 'isAdmin' | 'grantedProjects'> & { is_admin?: boolean; granted_projects?: string[] | null }) => ({
           ...r,
           isAdmin: r.is_admin ?? false,
+          grantedProjects: r.granted_projects ?? r.projects,
         })))
       } else {
         const body = await res.json().catch(() => ({}))
@@ -107,6 +109,22 @@ export default function AdminPage() {
       const newIsAdmin = body.role === 'admin'
       setRequests(prev => prev.map(r => r.id === id ? { ...r, isAdmin: newIsAdmin } : r))
     }
+  }
+
+  async function toggleProjectGrant(id: string, project: string) {
+    if (!token) return
+    const target = requests.find(r => r.id === id)
+    if (!target) return
+    const grantedProjects = target.grantedProjects.includes(project)
+      ? target.grantedProjects.filter(p => p !== project)
+      : [...target.grantedProjects, project]
+
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, grantedProjects } : r))
+    await fetch('/api/admin/requests', {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ id, grantedProjects }),
+    })
   }
 
   if (!ready) return null
@@ -174,6 +192,7 @@ export default function AdminPage() {
               onApprove={() => updateStatus(req.id, 'approved')}
               onReject={() => updateStatus(req.id, 'rejected')}
               onToggleAdmin={() => toggleAdmin(req.id)}
+              onToggleProject={(project) => toggleProjectGrant(req.id, project)}
             />
           ))
         )}
@@ -190,6 +209,7 @@ export default function AdminPage() {
               onApprove={() => updateStatus(req.id, 'approved')}
               onReject={() => updateStatus(req.id, 'rejected')}
               onToggleAdmin={() => toggleAdmin(req.id)}
+              onToggleProject={(project) => toggleProjectGrant(req.id, project)}
             />
           ))
         )}
@@ -420,12 +440,13 @@ function Section({
 }
 
 function RequestRow({
-  req, onApprove, onReject, onToggleAdmin,
+  req, onApprove, onReject, onToggleAdmin, onToggleProject,
 }: {
   req: UserRequest
   onApprove: () => void
   onReject: () => void
   onToggleAdmin: () => void
+  onToggleProject: (project: string) => void
 }) {
   const displayName = req.name || req.email.split('@')[0]
   const dateLabel = new Date(req.created_at).toLocaleDateString('en-GB', {
@@ -469,15 +490,30 @@ function RequestRow({
         </div>
         <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.1rem' }}>{req.email}</p>
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
-          {req.projects.map(p => (
-            <span key={p} style={{
-              fontSize: '0.68rem', color: '#4b5563',
-              background: '#f3f4f6', border: '1px solid #e5e7eb',
-              borderRadius: 99, padding: '0.1rem 0.5rem',
-            }}>
-              {p}
-            </span>
-          ))}
+          {req.projects.map(p => {
+            const granted = req.grantedProjects.includes(p)
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onToggleProject(p)}
+                title={granted ? `Access granted — click to revoke ${p}` : `Access not granted — click to grant ${p}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                  fontSize: '0.68rem', fontWeight: 500,
+                  color: granted ? '#4b5563' : '#9ca3af',
+                  background: granted ? '#f3f4f6' : '#fff',
+                  border: `1px solid ${granted ? '#e5e7eb' : '#e5e7eb'}`,
+                  borderRadius: 99, padding: '0.1rem 0.5rem',
+                  cursor: 'pointer', opacity: granted ? 1 : 0.6,
+                  textDecoration: granted ? 'none' : 'line-through',
+                }}
+              >
+                {granted && <Check size={9} />}
+                {p}
+              </button>
+            )
+          })}
         </div>
       </div>
 
