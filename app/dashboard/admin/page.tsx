@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ShieldCheck, UserCheck, Clock, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { ShieldCheck, UserCheck, Clock, CheckCircle2, XCircle, RefreshCw, Mail, Check } from 'lucide-react'
 
 type RequestStatus = 'pending' | 'approved' | 'rejected'
 
@@ -24,6 +24,7 @@ export default function AdminPage() {
   const [loading, setLoading]   = useState(true)
   const [fetchError, setFetchError] = useState('')
   const [token, setToken]       = useState<string | null>(null)
+  const [projectOptions, setProjectOptions] = useState<string[]>([])
   const router = useRouter()
 
   // Helper so every API call sends the bearer token explicitly.
@@ -57,6 +58,13 @@ export default function AdminPage() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/projects')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setProjectOptions(data) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -153,6 +161,8 @@ export default function AdminPage() {
         </div>
       )}
 
+      <InviteForm token={token} projectOptions={projectOptions} onInvited={() => token && fetchRequests(token)} />
+
       <Section title="Pending Requests" count={pending.length}>
         {pending.length === 0 ? (
           <EmptyState text="No pending requests." />
@@ -187,6 +197,199 @@ export default function AdminPage() {
 
     </div>
   )
+}
+
+function InviteForm({
+  token, projectOptions, onInvited,
+}: {
+  token: string | null
+  projectOptions: string[]
+  onInvited: () => void
+}) {
+  const [open, setOpen]           = useState(false)
+  const [email, setEmail]         = useState('')
+  const [name, setName]           = useState('')
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([])
+  const [asAdmin, setAsAdmin]     = useState(false)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [success, setSuccess]     = useState('')
+
+  function toggleProject(proj: string) {
+    setSelectedProjects(prev =>
+      prev.includes(proj) ? prev.filter(p => p !== proj) : [...prev, proj]
+    )
+  }
+
+  function resetForm() {
+    setEmail('')
+    setName('')
+    setSelectedProjects([])
+    setAsAdmin(false)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!token) return
+    if (selectedProjects.length === 0) { setError('Please select at least one project.'); return }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, name, projects: selectedProjects, isAdmin: asAdmin }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(body.error || `Failed to send invite (${res.status})`)
+        return
+      }
+      setSuccess(`Invite sent to ${email}.`)
+      resetForm()
+      onInvited()
+    } catch {
+      setError('Network error — could not reach the server.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: '2rem' }}>
+      <div style={{
+        background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 10,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden',
+      }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '1rem 1.25rem', background: 'none', border: 'none', cursor: 'pointer',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <Mail size={16} color="#7c3aed" />
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#111827' }}>Invite a user</span>
+          </div>
+          <span style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: 500 }}>
+            {open ? 'Close' : 'New invite'}
+          </span>
+        </button>
+
+        {open && (
+          <form onSubmit={handleSubmit} style={{
+            padding: '0 1.25rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.9rem',
+          }}>
+            <div style={{ display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 220px' }}>
+                <label style={inviteLabelStyle}>Email address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  placeholder="user@example.com"
+                  style={inviteInputStyle}
+                />
+              </div>
+              <div style={{ flex: '1 1 220px' }}>
+                <label style={inviteLabelStyle}>Full name (optional)</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Jane Smith"
+                  style={inviteInputStyle}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={inviteLabelStyle}>Project(s)</label>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {projectOptions.map(p => {
+                  const active = selectedProjects.includes(p)
+                  return (
+                    <button
+                      type="button"
+                      key={p}
+                      onClick={() => toggleProject(p)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                        fontSize: '0.75rem', fontWeight: 500,
+                        color: active ? '#7c3aed' : '#4b5563',
+                        background: active ? 'rgba(124,58,237,0.08)' : '#f9fafb',
+                        border: `1px solid ${active ? 'rgba(124,58,237,0.3)' : '#e5e7eb'}`,
+                        borderRadius: 99, padding: '0.3rem 0.65rem', cursor: 'pointer',
+                      }}
+                    >
+                      {active && <Check size={11} />}
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#374151', cursor: 'pointer' }}>
+              <input type="checkbox" checked={asAdmin} onChange={e => setAsAdmin(e.target.checked)} />
+              Grant admin access
+            </label>
+
+            {error && (
+              <div style={{
+                fontSize: '0.8rem', color: '#dc2626', background: 'rgba(220,38,38,0.06)',
+                border: '1px solid rgba(220,38,38,0.2)', borderRadius: 8, padding: '0.6rem 0.85rem',
+              }}>
+                {error}
+              </div>
+            )}
+            {success && (
+              <div style={{
+                fontSize: '0.8rem', color: '#059669', background: 'rgba(5,150,105,0.06)',
+                border: '1px solid rgba(5,150,105,0.2)', borderRadius: 8, padding: '0.6rem 0.85rem',
+              }}>
+                {success}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !token}
+              style={{
+                alignSelf: 'flex-start',
+                display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                fontSize: '0.8rem', fontWeight: 600, color: '#fff',
+                background: loading ? 'rgba(124,58,237,0.5)' : '#7c3aed',
+                border: 'none', borderRadius: 6, padding: '0.5rem 1rem',
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? 'Sending invite…' : 'Send invite'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const inviteLabelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '0.75rem', color: '#6b7280',
+  marginBottom: '0.35rem', fontWeight: 500,
+}
+
+const inviteInputStyle: React.CSSProperties = {
+  width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb',
+  borderRadius: 6, padding: '0.5rem 0.75rem', fontSize: '0.85rem',
+  color: '#111827', outline: 'none', boxSizing: 'border-box',
 }
 
 function Section({
